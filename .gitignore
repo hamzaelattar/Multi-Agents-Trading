@@ -11,3 +11,7 @@ venv/
 .env
 .env.*
 !.env.example
+
+# Scripts d’entraînement locaux
+/train_finrl_ensemble.py
+/train_stockformer.py
