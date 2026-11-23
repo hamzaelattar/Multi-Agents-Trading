@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environnements locaux
+.venv/
+venv/
+.env
+.env.*
+!.env.example
