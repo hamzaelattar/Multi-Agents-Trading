@@ -1,0 +1,36 @@
+[
+  {
+    "date": "2026-11-24",
+    "channel": "dukascopy-node 1.51.1 / Jetta",
+    "period": "2021-01-05 UTC",
+    "status": "HTTP 403 - DukascopyAccessDeniedError",
+    "url": "https://jetta.dukascopy.com/v1/ticks/XAU-USD/2021/1/5/1",
+    "downloaded_ticks": 0,
+    "cache": true,
+    "settings": {
+      "format": "array",
+      "timeframe": "tick",
+      "volumeUnits": "millions",
+      "batchSize": 4,
+      "pauseBetweenBatchesMs": 2000,
+      "retryCount": 2,
+      "rateLimitRetryCount": 2
+    }
+  },
+  {
+    "date": "2026-11-24",
+    "channel": "Flux historique officiel",
+    "period": "2021-01-05 01:00 UTC",
+    "status": "HTTP 429 - limitation de débit",
+    "url": "https://datafeed.dukascopy.com/datafeed/XAUUSD/2021/00/05/01h_ticks.bi5",
+    "downloaded_ticks": 0
+  },
+  {
+    "date": "2026-11-24",
+    "channel": "Page publique d’export",
+    "period": "Contrôle de disponibilité de la page",
+    "status": "HTTP 200 pour la page ; requêtes du catalogue Jetta en échec (CORS dans le navigateur)",
+    "url": "https://www.dukascopy.com/swiss/english/marketwatch/historical/",
+    "downloaded_ticks": 0
+  }
+]

@@ -1,0 +1,12 @@
+[
+    {
+        "file":  "XAUUSD_Ticks_2004.01.01_2021.10.15.csv",
+        "bytes":  25145311232,
+        "sha256":  "956b6b261e9dba1f2b89cc03667ef6cd0db509cdbc920f97f2a4d4c95159da2f"
+    },
+    {
+        "file":  "XAUUSD_Ticks_2021.01.04_2026.11.20.csv",
+        "bytes":  6830074333,
+        "sha256":  "0faf9bb44ca70ae9b088ce864fe27fdded3515a0604f26403c8424f8b430d5d5"
+    }
+]
