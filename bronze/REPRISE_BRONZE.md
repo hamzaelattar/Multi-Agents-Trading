@@ -1,6 +1,6 @@
 # Reprise Bronze XAUUSD · 24 novembre 2026
 
-Le [rapport Bronze](Rapport_Bronze_XAUUSD.html) distingue le profil initial, les vérifications JForex et la comparaison HistData. Les CSV, Parquet, archives et preuves ligne par ligne restent dans `data_trading_agent`. Le dépôt contient le code et le rapport agrégé. La collecte massive reste suspendue tant que les heures JForex manquantes et les limites des autres sources ne sont pas résolues.
+Le [rapport Bronze](Rapport_Bronze_XAUUSD.html) distingue le profil initial, les vérifications JForex et la comparaison HistData. Les CSV de travail, les fichiers Parquet et les preuves ligne par ligne sont dans `data`. Les CSV originaux et leurs archives sont conserv?s dans `data_trading_agent`. Le dépôt contient le code et le rapport agrégé. La collecte massive reste suspendue tant que les heures JForex manquantes et les limites des autres sources ne sont pas résolues.
 
 ## Lots officiels JForex
 

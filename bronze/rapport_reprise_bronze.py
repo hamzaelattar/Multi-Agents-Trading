@@ -44,8 +44,8 @@ def chart(august, before_jan, after_hist, nov_hours):
 
 
 def main(root, source, output):
-    repository = root / 'data_trading_agent'
-    bronze = root / 'bronze_dukascopy'
+    repository = root / 'data'
+    bronze = root / 'data/source_runs'
     hist = repository / 'recovered/autres_fournisseurs/histdata'
     compare = load(repository / 'reports/comparaisons_verification.json')
     winter = load(hist / '2021/01/comparaison_JForex_2021-01-05.json')

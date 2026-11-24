@@ -29,8 +29,8 @@ def encodings(tokens, width=4):
 
 def main(root, output):
     repo = root / 'github'
-    original = root / 'data_trading_agent'
-    pilot = root / 'bronze_dukascopy/pilote_jforex/XAUUSD_2021-01-05_JForex_UTC.csv'
+    original = root / 'data'
+    pilot = root / 'data/source_runs/pilote_jforex/XAUUSD_2021-01-05_JForex_UTC.csv'
     module = runpy.run_path(str(repo / 'bronze/jforex/comparer_pilote_jforex.py'))
     reference = module['provider_ticks'](pilot)
     providers = Counter(t for t, _ in reference)

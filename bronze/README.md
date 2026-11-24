@@ -18,8 +18,8 @@ Depuis la racine du dépôt, avec Node.js et le binaire DuckDB installé :
 ```powershell
 npm.cmd ci --prefix bronze
 $projet = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Multi-Agents-Trading'
-$donnees = Join-Path $projet 'data_trading_agent'
-$bronze = Join-Path $projet 'bronze_dukascopy'
+$donnees = Join-Path $projet 'data'
+$bronze = Join-Path $projet 'data/source_runs'
 $duckdb = Join-Path $env:LOCALAPPDATA 'duckdb/cli/2.0.1/duckdb.exe'
 node bronze/collecter_dukascopy.cjs --from 2021-01-05 --through 2021-01-05 --out $bronze --duckdb $duckdb
 ```

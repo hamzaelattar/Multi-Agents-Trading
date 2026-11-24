@@ -27,8 +27,8 @@ def copy_exact(source, target):
 
 
 def stage(root):
-    data = root / 'data_trading_agent'
-    bronze = root / 'bronze_dukascopy'
+    data = root / 'data'
+    bronze = root / 'data/source_runs'
     for name in ('recovered/dukascopy', 'recovered/autres_fournisseurs', 'quarantine', 'manifests', 'reports', 'logs'):
         (data / name).mkdir(parents=True, exist_ok=True)
     sources = [bronze / 'verifications_jforex_2026-11-24', bronze / 'jforex_borne_2026-11-23']

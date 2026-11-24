@@ -46,10 +46,10 @@ def read_export(module, file):
 def inspect_dates(root, journal):
     repo = root / 'github'
     module = runpy.run_path(str(repo / 'bronze/jforex/comparer_pilote_jforex.py'))
-    data = root / 'data_trading_agent'
+    data = root / 'data'
     old = data / 'XAUUSD_Ticks_2004.01.01_2021.10.15.csv'
     recent = data / 'XAUUSD_Ticks_2021.01.04_2026.11.20.csv'
-    bronze = root / 'bronze_dukascopy'
+    bronze = root / 'data/source_runs'
     followup = bronze / f'verifications_jforex_{LONG_DATE}'
     initial = bronze / 'pilote_jforex/XAUUSD_2021-01-05_JForex_UTC.csv'
     results = {}
@@ -173,7 +173,7 @@ def build_section(results, precision):
 
 
 def main(root, baseline, output):
-    followup = root / f'bronze_dukascopy/verifications_jforex_{LONG_DATE}'
+    followup = root / f'data/source_runs/verifications_jforex_{LONG_DATE}'
     with (followup / 'heures.tsv').open(encoding='utf-8', newline='') as stream:
         journal = list(csv.DictReader(stream, delimiter='\t'))
     results = inspect_dates(root, journal)

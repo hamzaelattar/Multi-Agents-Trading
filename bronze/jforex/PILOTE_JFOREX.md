@@ -6,13 +6,13 @@ Le pilote vise l’intervalle `2021-01-05T00:00:00.000Z` inclus à `2021-01-06T0
 
 ## JForex 4 Desktop
 
-Dans l’application officielle, ouvrir une session **DEMO**. Dans **Historical Data Manager**, sélectionner **XAU/USD** et demander les **ticks** de la seule journée pilote, avec millisecondes, Ask, Bid et les deux volumes. Utiliser UTC/GMT si l’interface permet de le choisir et noter le fuseau et l’unité affichés dans tous les cas. Conserver l’export brut dans `bronze_dukascopy/pilote_jforex`. Les identifiants de démonstration se saisissent dans l’application ou le terminal local. La création d’un compte, si nécessaire, se fait sur la page officielle. [JForex 4](https://www.dukascopy.com/land/trading/bank/platforms/jforex4/) · [Manuel de l’espace de travail](https://wiki.dukascopy.com/en/manuals/jforex4-desktop/workspace/)
+Dans l’application officielle, ouvrir une session **DEMO**. Dans **Historical Data Manager**, sélectionner **XAU/USD** et demander les **ticks** de la seule journée pilote, avec millisecondes, Ask, Bid et les deux volumes. Utiliser UTC/GMT si l’interface permet de le choisir et noter le fuseau et l’unité affichés dans tous les cas. Conserver l’export brut dans `data/source_runs/pilote_jforex`. Les identifiants de démonstration se saisissent dans l’application ou le terminal local. La création d’un compte, si nécessaire, se fait sur la page officielle. [JForex 4](https://www.dukascopy.com/land/trading/bank/platforms/jforex4/) · [Manuel de l’espace de travail](https://wiki.dukascopy.com/en/manuals/jforex4-desktop/workspace/)
 
 ## JForex Java SDK
 
 `PiloteXauusdJForex.java` utilise uniquement `IContext.getHistory()` et `IHistory.getTicks()` pour la lecture. Les appels horaires couvrent `start` à `end - 1 ms` parce que `getTicks` inclut ses deux bornes. Les ticks de même timestamp restent distincts. Les valeurs `ITick` sont exportées telles que retournées, sans facteur de volume supposé. Le code a compilé avec l’API officielle 2.13.99. Son exécution sur le serveur attend l’authentification démo. [Historique des ticks](https://wiki.dukascopy.com/en/development/strategy-api/historical-data/history-ticks/) · [Vue d’ensemble](https://wiki.dukascopy.com/en/development/strategy-api/historical-data/overview-historical-data/) · [SDK officiel](https://wiki.dukascopy.com/en/development/get-started-api/use-jforex-sdk/download-jforex-sdk) · [Client démo](https://www.dukascopy.com/wiki/en/development/get-started-api/use-jforex-sdk/sdk-client/)
 
-Le fichier peut être chargé dans l’éditeur d’une session démo. Pour le SDK autonome, ajouter la classe au projet officiel et exécuter sa méthode `main` dans un terminal avec comme unique argument le dossier `bronze_dukascopy/pilote_jforex`. Le programme demande le mot de passe au terminal et limite la requête à la journée pilote. L’export normalisé porte le nom `XAUUSD_2021-01-05_JForex_UTC.csv`.
+Le fichier peut être chargé dans l’éditeur d’une session démo. Pour le SDK autonome, ajouter la classe au projet officiel et exécuter sa méthode `main` dans un terminal avec comme unique argument le dossier `data/source_runs/pilote_jforex`. Le programme demande le mot de passe au terminal et limite la requête à la journée pilote. L’export normalisé porte le nom `XAUUSD_2021-01-05_JForex_UTC.csv`.
 
 ## Comparaison avec les originaux
 
@@ -20,8 +20,8 @@ Depuis la racine du dépôt :
 
 ```powershell
 $projet = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Multi-Agents-Trading'
-$data = Join-Path $projet 'data_trading_agent'
-$pilote = Join-Path $projet 'bronze_dukascopy/pilote_jforex'
+$data = Join-Path $projet 'data'
+$pilote = Join-Path $projet 'data/source_runs/pilote_jforex'
 python bronze/jforex/comparer_pilote_jforex.py `
   --local (Join-Path $data 'XAUUSD_Ticks_2004.01.01_2021.10.15.csv') `
   --local (Join-Path $data 'XAUUSD_Ticks_2021.01.04_2026.11.20.csv') `
