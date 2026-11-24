@@ -52,6 +52,7 @@ public class PiloteXauusdJForex implements IStrategy {
     public void onStart(IContext context) throws JFException {
         try {
             Path directory = outputDirectory != null ? outputDirectory : context.getFilesDir().toPath();
+            context.setSubscribedInstruments(java.util.Collections.singleton(Instrument.XAUUSD), true);
             Path output = export(context.getHistory(), directory);
             context.getConsole().getOut().println("JForex pilot saved: " + output);
         } catch (IOException | RuntimeException | JFException e) {

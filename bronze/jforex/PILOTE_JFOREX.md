@@ -1,5 +1,7 @@
 # Pilote XAUUSD du 5 janvier 2021 UTC
 
+*Mise à jour du 24 novembre 2026.* La session DEMO a produit 146 982 ticks sur 17 heures. Les deux exports locaux en contiennent chacun 183 840 avec le décalage UTC+2. Les 36 858 ticks d’écart sont concentrés sur six heures. La reprise ciblée est restée vide. Le lot est audité et la validation du pilote reste en attente. [Résultats chiffrés du pilote](Rapport_Pilote_JForex_2021-01-05.txt).
+
 Le pilote vise l’intervalle `2021-01-05T00:00:00.000Z` inclus à `2021-01-06T00:00:00.000Z` exclu. Il repose sur une session **DEMO** authentifiée. Le descripteur officiel de la session DEMO a répondu HTTP 200. Aucun CSV fournisseur n’a été obtenu sans cette session et l’historique local n’a pas été modifié.
 
 ## JForex 4 Desktop

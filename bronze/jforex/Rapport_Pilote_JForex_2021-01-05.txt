@@ -1,0 +1,56 @@
+Pilote Bronze XAUUSD du 5 janvier 2021 UTC
+=========================================
+
+Source officielle JForex DEMO SDK 3.6.51 / API 2.13.99, méthode IHistory.getTicks().
+Fenêtre 00:00 UTC incluse → 00:00 UTC le jour suivant exclue.
+Statut Bronze : export initial audité, comparaison en attente de validation.
+
+Ticks présents dans chacun des CSV locaux : 183 840
+Ticks JForex récupérés : 146 982, dont 0 en reprise ciblée.
+La reprise ciblée des heures absentes a renvoyé un résultat vide. Elle ne confirme aucune fermeture.
+Ticks locaux sans référence reçue : 36 858
+Heures avec un déficit : 01 h, 03 h, 04 h, 05 h, 07 h, 08 h.
+Les 146 982 horodatages JForex existent dans les deux CSV avec local = UTC + 2 h.
+Ce décalage concerne le jour d’hiver étudié. Le régime d’été reste à tester.
+
+Ask et Bid identiques sur les 146 860 ticks locaux lisibles appariés.
+Timestamps, prix et volumes identiques sans facteur sur 146 824 ticks.
+36 champs de volume diffèrent exactement, avec des écarts absolus de 0.000002 à 0.000005.
+Un arrondi à cinq décimales HALF_UP explique 8 de ces 36 champs. La cause des autres écarts reste ouverte.
+122 des 125 lignes ambiguës de cette journée ont une référence JForex à la même milliseconde.
+Les originaux sont conservés séparément. Aucune correction n’y a été appliquée.
+
+L’audit DuckDB de l’export initial relève zéro doublon exact, recul chronologique, valeur nulle,
+format invalide, prix non positif, spread négatif ou volume négatif.
+
+Effectifs par heure UTC
+Heure    Local     JForex    Écart
+00 h     4 744      4 744        0
+01 h     8 641          0    8 641
+02 h     6 780      6 780        0
+03 h     5 385          0    5 385
+04 h     4 521          0    4 521
+05 h     4 787          0    4 787
+06 h     6 377      6 377        0
+07 h     6 243          0    6 243
+08 h     7 281          0    7 281
+09 h     8 841      8 841        0
+10 h     5 846      5 846        0
+11 h     7 748      7 748        0
+12 h     9 288      9 288        0
+13 h    13 261     13 261        0
+14 h    18 486     18 486        0
+15 h    16 088     16 088        0
+16 h    13 235     13 235        0
+17 h    10 895     10 895        0
+18 h     6 861      6 861        0
+19 h     5 448      5 448        0
+20 h     7 305      7 305        0
+21 h     2 033      2 033        0
+22 h         0          0        0
+23 h     3 746      3 746        0
+
+Provenance locale et intégrité
+XAUUSD_2021-01-05_JForex_UTC.csv — SHA-256 10e6dfc8c3e8bedd10e0f41271b7d36741a260b6bf17abbc3b3341f43993df57
+Les fichiers de ticks et les rapports détaillés sont conservés localement dans bronze_dukascopy/pilote_jforex.
+Aucun ordre, aucune requête S3 et aucun téléchargement massif ont été engagés.
