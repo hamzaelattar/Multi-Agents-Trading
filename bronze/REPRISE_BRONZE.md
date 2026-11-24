@@ -38,11 +38,14 @@ Depuis le dépôt, avec les variables PowerShell projet et DuckDB de la section 
 $data = Join-Path $projet 'data'
 $histdata = Join-Path $data 'recovered/autres_fournisseurs/histdata'
 python bronze/histdata/collecter_histdata_mensuel.py --out $histdata --duckdb $duckdb --from 2023-01 --through 2026-11 --pause 10
-python bronze/mesurer_apport_utc.py --data $data --duckdb $duckdb 2023 2024 2025 2026
+python bronze/mesurer_apport_utc.py --data $data --duckdb $duckdb 2021 2022 2023 2024 2025 2026
+python bronze/mesurer_apport_utc.py --data $data --duckdb $duckdb --histdata 2009 2013
 python bronze/bilan_couverture.py --data $data --html (Join-Path $data 'reports/Rapport_Bronze_XAUUSD.html')
 ```
 
 
+
+La collecte HistData a produit 194 archives mensuelles extraites et auditées, dont les 166 mois de mars 2009 à décembre 2022. Les archives représentent 472 336 326 lignes de prix brutes. L’analyse HistData teste des déplacements de 6 h, 7 h et 8 h entre l’horloge brute et le CSV local. Elle signale les minutes qui n’apparaissent dans aucune hypothèse. Les données restent en attente de rapprochement au tick. Pour 2013, 1 616 minutes et 64 210 lignes de prix ont été signalées par ce contrôle.
 
 ### Résultats de la couverture récente
 

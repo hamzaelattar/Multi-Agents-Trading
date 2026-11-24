@@ -24,10 +24,15 @@ def write_coverage(data):
     pending = output.with_suffix('.tmp')
     gains_path = reports / 'Apport_minutes_UTC_XAUUSD.json'
     gains = read_json(gains_path) if gains_path.is_file() else {}
+    histdata_gains_path = reports / 'Apport_minutes_HistData_XAUUSD.json'
+    historic_gains = read_json(histdata_gains_path) if histdata_gains_path.is_file() else {}
     table = []
     for row in baseline:
         year = row['année']
         monthly = [read_json(path) for path in sorted((histdata / year).glob('*/HISTDATA_*.audit.json'))]
+        raw_gain = historic_gains.get(year, {})
+        if raw_gain.get('mois_audites') != len(monthly):
+            raw_gain = {}
         mirror_dir = archive / 'touhid_xauusd' / year
         mirror_path = mirror_dir / 'audit_annuel.json'
         if not mirror_path.exists():
@@ -45,6 +50,8 @@ def write_coverage(data):
             'mois_histdata_audites': len(monthly),
             'liste_mois_histdata': ' '.join(month['month'] for month in monthly),
             'ticks_histdata_bruts': sum(month['ticks'] for month in monthly) if monthly else None,
+            'minutes_histdata_absentes_sous_6h_7h_8h': raw_gain.get('minutes_sans_locale'),
+            'ticks_histdata_dans_ces_minutes': raw_gain.get('ticks_dans_minutes_sans_locale'),
             'jours_histdata_bruts': sum(month['dates'] for month in monthly) if monthly else None,
             'minutes_histdata_brutes': sum(month['minutes'] for month in monthly) if monthly else None,
             'debut_histdata_brut': monthly[0]['first_raw'] if monthly else None,
