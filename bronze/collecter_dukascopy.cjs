@@ -86,22 +86,61 @@ function validate(binary, file, expected, cwd) {
             count(*) FILTER (WHERE date_diff('millisecond', previous, t) >= 60000) AS gaps_ge_1min,
             max(date_diff('millisecond',previous,t)) AS max_gap_ms
         FROM sequenced;`, cwd);
-    if (summary.ticks !== expected || summary.rows_with_nulls || summary.invalid_timestamps || summary.invalid_numbers) {
-        throw new Error(`Validation du format échouée : ${JSON.stringify(summary)}`);
-    }
     const coverage = duckdbJson(binary, `SET TimeZone='UTC';
         SELECT substr(timestamp_utc,1,16) AS minute_utc, count(*) AS ticks FROM ${scan}
+        WHERE try_cast(timestamp_utc AS TIMESTAMPTZ) IS NOT NULL
         GROUP BY 1 ORDER BY 1;`, cwd);
     const hours = {};
     for (const row of coverage) {
         const hour = row.minute_utc.slice(0, 13);
         hours[hour] = (hours[hour] ?? 0) + row.ticks;
     }
-    return {summary, hours, minutes: coverage};
+    const blocking = ['rows_with_nulls', 'invalid_timestamps', 'invalid_numbers', 'chronological_reversals',
+        'nonpositive_prices', 'negative_spreads', 'negative_volumes'].filter(field => summary[field] > 0);
+    if (summary.ticks !== expected || summary.ticks === 0) blocking.push('unexpected_row_count');
+    const forReview = ['exact_duplicate_rows', 'zero_spreads', 'gaps_ge_1min']
+        .filter(field => summary[field] > 0);
+    return {summary, hours, minutes: coverage,
+        internal_checks: blocking.length ? 'issues_found' : 'passed', blocking, for_review: forReview};
 }
 
 function sha256(data) {
     return createHash('sha256').update(data).digest('hex');
+}
+
+async function readJson(file) {
+    const text = await fs.readFile(file, 'utf8').catch(error => {
+        if (error.code !== 'ENOENT') throw error;
+    });
+    return text === undefined ? null : JSON.parse(text);
+}
+
+async function writeJson(file, data) {
+    await fs.writeFile(file, JSON.stringify(data, null, 2) + '\n', {flag:'wx'});
+}
+
+async function auditDownloaded(binary, file, manifest, auditPath, cwd, note) {
+    if (manifest.sha256 !== sha256(await fs.readFile(file))) throw new Error(`SHA-256 incompatible : ${file}`);
+    const existing = await readJson(auditPath);
+    if (existing) {
+        if (existing.status !== 'audited' || existing.sha256 !== manifest.sha256) {
+            throw new Error(`Audit incompatible : ${auditPath}`);
+        }
+        return existing;
+    }
+    let audit;
+    try {
+        audit = {status:'audited', validation_status:'pending', sha256:manifest.sha256, at_utc:new Date().toISOString(),
+            ...validate(binary, file, manifest.ticks, cwd)};
+        await writeJson(auditPath, audit);
+    } catch (error) {
+        await note({status:'audit_failed', type:error.name, message:error.message, sha256:manifest.sha256});
+        throw error;
+    }
+    // Validation against independent source evidence is intentionally separate from the internal audit.
+    await note({status:'audited', sha256:manifest.sha256, ticks:audit.summary.ticks,
+        internal_checks:audit.internal_checks, blocking:audit.blocking, for_review:audit.for_review});
+    return audit;
 }
 
 async function main() {
@@ -129,6 +168,7 @@ async function main() {
         const folder = path.join(out, date.slice(0, 4), date.slice(5, 7));
         const file = path.join(folder, `${date}.csv`);
         const manifest = path.join(folder, `${date}.json`);
+        const auditPath = path.join(folder, `${date}.audit.json`);
         const pending = path.join(folder, `${date}.part.csv`);
         const provenance = {date, from_utc: first, to_exclusive_utc: last, instrument: 'xauusd',
             source: 'Dukascopy', endpoint: URL_ROOT, dukascopy_node: libraryVersion,
@@ -137,13 +177,15 @@ async function main() {
             await fs.appendFile(log, JSON.stringify({...provenance, at_utc: new Date().toISOString(), ...details}) + '\n');
             console.log(date, details.status, details.ticks ?? details.message ?? '');
         };
-        if (await fs.stat(manifest).catch(error => { if (error.code !== 'ENOENT') throw error; })) {
-            const saved = JSON.parse(await fs.readFile(manifest, 'utf8'));
-            if (saved.sha256 !== sha256(await fs.readFile(file))) throw new Error(`SHA-256 incompatible : ${file}`);
-            console.log(date, 'sha256_verified_resume');
+        const saved = await readJson(manifest);
+        if (saved) {
+            // Legacy manifests also have an immutable SHA-256 and tick count.
+            const resumed = await auditDownloaded(binary, file, saved, auditPath, out, note);
+            console.log(date, 'resumed', resumed.status, resumed.internal_checks);
             continue;
         }
         await fs.mkdir(folder, {recursive:true});
+        let record;
         try {
             for (const artifact of [file, pending]) {
                 if (await fs.stat(artifact).catch(error => { if (error.code !== 'ENOENT') throw error; })) {
@@ -158,20 +200,20 @@ async function main() {
             }
             const csv = toCsv(ticks, stamp, stamp + dayMs);
             await fs.writeFile(pending, csv, {flag:'wx'});
-            const validation = validate(binary, pending, ticks.length, out);
-            const record = {...provenance, at_utc:new Date().toISOString(), sha256:sha256(csv),
-                bytes:Buffer.byteLength(csv), ticks:ticks.length, validation};
+            record = {...provenance, status:'downloaded', at_utc:new Date().toISOString(), sha256:sha256(csv),
+                bytes:Buffer.byteLength(csv), ticks:ticks.length};
             // Link without replacing any file that could already exist.
             await fs.link(pending, file);
-            await fs.writeFile(manifest, JSON.stringify(record, null, 2) + '\n', {flag:'wx'});
+            await writeJson(manifest, record);
             await fs.unlink(pending);
-            await note({status:'collected_and_profiled', ticks:ticks.length, sha256:record.sha256});
+            await note({status:'downloaded', ticks:ticks.length, sha256:record.sha256});
         } catch (error) {
-            await note({status:'failed', type:error.name, message:error.message});
+            await note({status:'download_failed', type:error.name, message:error.message});
             throw error; // Cached requests remain reusable. In particular, stop on denied/rate-limited access.
         }
+        await auditDownloaded(binary, file, record, auditPath, out, note);
     }
 }
 
-module.exports = {day, decimal, toCsv, validate};
+module.exports = {day, decimal, toCsv, validate, auditDownloaded};
 if (require.main === module) main().catch(error => { console.error(error.name, error.message); process.exitCode = 1; });

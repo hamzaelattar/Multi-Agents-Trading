@@ -2,7 +2,16 @@
 
 Le rapport du 24 novembre 2026 présente les résultats locaux minute par minute. L’essai Dukascopy du 5 janvier 2021 a reçu HTTP 403 sur `dukascopy-node` et HTTP 429 sur le flux historique. Les colonnes qui exigent une comparaison fournisseur restent non déterminées dans le rapport.
 
-## Journée pilote et reprise
+## Voies officielles du pilote
+
+Le collecteur HTTP reste en pause. Consulter [le pilote JForex du 5 janvier 2021](jforex/PILOTE_JFOREX.md) pour les voies DEMO, la comparaison UTC et l’estimation S3.
+
+Un manifeste `downloaded` consigne le CSV et son SHA-256. Le rapport séparé `.audit.json` porte le statut `audited`, les alertes et `validation_status: pending`. La validation des données exige un rapprochement fournisseur. Une reprise peut effectuer l’audit manquant à partir du CSV local.
+
+## Commandes historiques du collecteur HTTP
+
+Ces commandes documentent l’infrastructure existante. Son accès reste suspendu.
+
 
 Depuis la racine du dépôt, avec Node.js et le binaire DuckDB installé :
 

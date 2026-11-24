@@ -1,0 +1,108 @@
+{
+  "status": "awaiting_official_export",
+  "window_utc": [
+    "2021-01-05T00:00:00+00:00",
+    "2021-01-06T00:00:00+00:00"
+  ],
+  "reference_ticks": null,
+  "local_exports": {
+    "XAUUSD_Ticks_2004.01.01_2021.10.15.csv": {
+      "offset_candidates": [
+        {
+          "offset_minutes_local_minus_utc": -240,
+          "local_ticks": 191446,
+          "local_ambiguous_or_unreadable": 158
+        },
+        {
+          "offset_minutes_local_minus_utc": -180,
+          "local_ticks": 187891,
+          "local_ambiguous_or_unreadable": 136
+        },
+        {
+          "offset_minutes_local_minus_utc": -120,
+          "local_ticks": 184394,
+          "local_ambiguous_or_unreadable": 136
+        },
+        {
+          "offset_minutes_local_minus_utc": -60,
+          "local_ticks": 183115,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 0,
+          "local_ticks": 183682,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 60,
+          "local_ticks": 183682,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 120,
+          "local_ticks": 183840,
+          "local_ambiguous_or_unreadable": 125
+        },
+        {
+          "offset_minutes_local_minus_utc": 180,
+          "local_ticks": 184349,
+          "local_ambiguous_or_unreadable": 79
+        },
+        {
+          "offset_minutes_local_minus_utc": 240,
+          "local_ticks": 188059,
+          "local_ambiguous_or_unreadable": 93
+        }
+      ]
+    },
+    "XAUUSD_Ticks_2021.01.04_2026.11.20.csv": {
+      "offset_candidates": [
+        {
+          "offset_minutes_local_minus_utc": -240,
+          "local_ticks": 191446,
+          "local_ambiguous_or_unreadable": 158
+        },
+        {
+          "offset_minutes_local_minus_utc": -180,
+          "local_ticks": 187891,
+          "local_ambiguous_or_unreadable": 136
+        },
+        {
+          "offset_minutes_local_minus_utc": -120,
+          "local_ticks": 184394,
+          "local_ambiguous_or_unreadable": 136
+        },
+        {
+          "offset_minutes_local_minus_utc": -60,
+          "local_ticks": 183115,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 0,
+          "local_ticks": 183682,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 60,
+          "local_ticks": 183682,
+          "local_ambiguous_or_unreadable": 129
+        },
+        {
+          "offset_minutes_local_minus_utc": 120,
+          "local_ticks": 183840,
+          "local_ambiguous_or_unreadable": 125
+        },
+        {
+          "offset_minutes_local_minus_utc": 180,
+          "local_ticks": 184349,
+          "local_ambiguous_or_unreadable": 79
+        },
+        {
+          "offset_minutes_local_minus_utc": 240,
+          "local_ticks": 188059,
+          "local_ambiguous_or_unreadable": 93
+        }
+      ]
+    }
+  }
+}
