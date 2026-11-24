@@ -27,10 +27,15 @@ public class VerifierJForexBronze implements IStrategy {
     private static final int[] MISSING = {1, 3, 4, 5, 7, 8};
     private final Path output;
     private final String[] days;
+    private final int[] requestedHours;
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile Exception failure;
 
-    VerifierJForexBronze(Path output, String[] days) { this.output = output; this.days = days; }
+    VerifierJForexBronze(Path output, String[] days, int[] requestedHours) {
+        this.output = output;
+        this.days = days;
+        this.requestedHours = requestedHours;
+    }
 
     @Override public void onStart(IContext context) throws JFException {
         try {
@@ -53,7 +58,10 @@ public class VerifierJForexBronze implements IStrategy {
 
     private void exportDay(IHistory history, BufferedWriter journal, String date) throws Exception {
         long origin = Instant.parse(date + "T00:00:00Z").toEpochMilli();
-        int[] hours = date.equals("2021-01-05") ? MISSING : java.util.stream.IntStream.range(0, 24).toArray();
+        int[] hours = requestedHours;
+        if (hours == null) {
+            hours = date.equals("2021-01-05") ? MISSING : java.util.stream.IntStream.range(0, 24).toArray();
+        }
         Path pending = output.resolve(date + ".part.csv");
         Path finished = output.resolve(date + ".csv");
         if (Files.exists(finished)) throw new IOException("Output already exists for " + date);
@@ -99,16 +107,23 @@ public class VerifierJForexBronze implements IStrategy {
 
     public static void main(String[] args) throws Exception {
         Console console = System.console();
-        if (args.length < 1 || args.length > 2 || console == null) {
-            throw new IllegalArgumentException("Use a terminal with an output directory and optionally one finished UTC day.");
+        if (args.length < 1 || args.length > 3 || console == null) {
+            throw new IllegalArgumentException("Use a terminal with an output directory, optionally one finished UTC day and a comma-separated hour list.");
         }
         String[] selected = DAYS;
-        if (args.length == 2) {
+        if (args.length >= 2) {
             java.time.LocalDate day = java.time.LocalDate.parse(args[1]);
             if (!day.isBefore(java.time.LocalDate.now(java.time.ZoneOffset.UTC))) {
                 throw new IllegalArgumentException("The explicit UTC day must be finished.");
             }
             selected = new String[] {day.toString()};
+        }
+        int[] hours = null;
+        if (args.length == 3) {
+            hours = Arrays.stream(args[2].split(",", -1)).mapToInt(Integer::parseInt).sorted().toArray();
+            if (hours[0] < 0 || hours[hours.length - 1] > 23 || Arrays.stream(hours).distinct().count() != hours.length) {
+                throw new IllegalArgumentException("Hours must be unique UTC hours from 0 through 23.");
+            }
         }
         char[] login = console.readPassword("JForex DEMO login: ");
         char[] password = console.readPassword("JForex DEMO password: ");
@@ -123,7 +138,7 @@ public class VerifierJForexBronze implements IStrategy {
             }
             for (int i = 0; i < 120 && !client.isConnected(); i++) Thread.sleep(250);
             if (!client.isConnected()) throw new IOException("DEMO session unavailable.");
-            VerifierJForexBronze check = new VerifierJForexBronze(Paths.get(args[0]).toAbsolutePath(), selected);
+            VerifierJForexBronze check = new VerifierJForexBronze(Paths.get(args[0]).toAbsolutePath(), selected, hours);
             long id = client.startStrategy(check);
             if (!check.done.await(32, TimeUnit.MINUTES)) {
                 client.stopStrategy(id);
