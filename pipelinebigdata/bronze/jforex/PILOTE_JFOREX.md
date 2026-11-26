@@ -22,7 +22,7 @@ Depuis la racine du dépôt :
 $projet = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Multi-Agents-Trading'
 $data = Join-Path $projet 'data'
 $pilote = Join-Path $projet 'data/source_runs/pilote_jforex'
-python bronze/jforex/comparer_pilote_jforex.py `
+python pipelinebigdata/bronze/jforex/comparer_pilote_jforex.py `
   --local (Join-Path $data 'XAUUSD_Ticks_2004.01.01_2021.10.15.csv') `
   --local (Join-Path $data 'XAUUSD_Ticks_2021.01.04_2026.11.20.csv') `
   --reference (Join-Path $pilote 'XAUUSD_2021-01-05_JForex_UTC.csv') `

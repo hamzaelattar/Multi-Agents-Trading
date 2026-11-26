@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 
-DOSSIER_DONNEES = Path(__file__).resolve().parent.parent / "data"
+DOSSIER_DONNEES = Path(__file__).resolve().parents[3] / "data"
 ANCIEN = DOSSIER_DONNEES / "XAUUSD_Ticks_2004.01.01_2021.10.15.csv"
 RECENT = DOSSIER_DONNEES / "XAUUSD_Ticks_2021.01.04_2026.11.20.csv"
 SORTIE = DOSSIER_DONNEES / "XAUUSD_Ticks_fusion_brute.csv.gz"

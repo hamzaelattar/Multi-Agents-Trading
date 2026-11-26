@@ -1,6 +1,6 @@
 # Reprise Bronze XAUUSD · 24 novembre 2026
 
-Le [rapport Bronze](Rapport_Bronze_XAUUSD.html) distingue le profil initial, les vérifications JForex et la comparaison HistData. Le dépôt contient le code et le rapport agrégé. Le collecteur HTTP Dukascopy reste suspendu. Les sources complémentaires sont conservées séparément.
+Le [rapport Bronze](preuves/Rapport_Bronze_XAUUSD.html) distingue le profil initial, les vérifications JForex et la comparaison HistData. Le dépôt contient le code et le rapport agrégé. Le collecteur HTTP Dukascopy reste suspendu. Les sources complémentaires sont conservées séparément.
 
 ## Dossier local `data`
 
@@ -12,7 +12,7 @@ Le [rapport Bronze](Rapport_Bronze_XAUUSD.html) distingue le profil initial, les
 
 `jforex/VerifierJForexBronze.java` utilise le SDK officiel 3.6.51, l’API 2.13.99 et un compte démo. Il interroge une heure à la fois et consigne chaque réponse. Le mode sans date ne couvre que les cinq sondes de cette exécution. Le second argument limite la requête à un jour UTC terminé. Avec ce jour explicite, le troisième argument peut limiter les requêtes à des heures UTC séparées par des virgules. Choisir un nouveau dossier local pour chaque tentative. Le SDK gère son cache de session. Les fichiers partiels et les heures vides restent des preuves à examiner.
 
-`jforex/auditer_verifications_jforex.cjs` audite les CSV finalisés avec DuckDB et vérifie leurs effectifs par rapport au journal. Depuis le dépôt, avec les dépendances installées dans `bronze`, l’ordre des arguments est le chemin de `bronze/collecter_dukascopy.cjs`, le dossier de la session JForex puis le chemin de `duckdb.exe`. `jforex/etudier_ambiguities_jforex.py` prend le dossier de projet et un chemin JSON de sortie. Il rapproche le premier pilote avec les deux originaux. `archiver_verifications_bronze.py` prend le dossier de projet, vérifie les SHA-256 et copie les lots audités dans `recovered/dukascopy`, avec journaux et manifestes séparés.
+`jforex/auditer_verifications_jforex.cjs` audite les CSV finalisés avec DuckDB et vérifie leurs effectifs par rapport au journal. Depuis le dépôt, avec les dépendances installées dans `pipelinebigdata/bronze/acquisition`, l’ordre des arguments est le chemin de `pipelinebigdata/bronze/acquisition/collecter_dukascopy.cjs`, le dossier de la session JForex puis le chemin de `duckdb.exe`. `jforex/etudier_ambiguities_jforex.py` prend le dossier de projet et un chemin JSON de sortie. Il rapproche le premier pilote avec les deux originaux. `audit/archiver_verifications_bronze.py` prend le dossier de projet, vérifie les SHA-256 et copie les lots audités dans `recovered/dukascopy`, avec journaux et manifestes séparés.
 
 ## Canal public HistData
 
@@ -37,10 +37,10 @@ Depuis le dépôt, avec les variables PowerShell projet et DuckDB de la section 
 ```powershell
 $data = Join-Path $projet 'data'
 $histdata = Join-Path $data 'recovered/autres_fournisseurs/histdata'
-python bronze/histdata/collecter_histdata_mensuel.py --out $histdata --duckdb $duckdb --from 2023-01 --through 2026-11 --pause 10
-python bronze/mesurer_apport_utc.py --data $data --duckdb $duckdb 2021 2022 2023 2024 2025 2026
-python bronze/mesurer_apport_utc.py --data $data --duckdb $duckdb --histdata 2009 2013
-python bronze/bilan_couverture.py --data $data --html (Join-Path $data 'reports/Rapport_Bronze_XAUUSD.html')
+python pipelinebigdata/bronze/histdata/collecter_histdata_mensuel.py --out $histdata --duckdb $duckdb --from 2023-01 --through 2026-11 --pause 10
+python pipelinebigdata/bronze/audit/mesurer_apport_utc.py --data $data --duckdb $duckdb 2021 2022 2023 2024 2025 2026
+python pipelinebigdata/bronze/audit/mesurer_apport_utc.py --data $data --duckdb $duckdb --histdata 2009 2013
+python pipelinebigdata/bronze/audit/bilan_couverture.py --data $data --html (Join-Path $data 'reports/Rapport_Bronze_XAUUSD.html')
 ```
 
 
@@ -61,7 +61,7 @@ Les quatre archives UTC contiennent 248 407 454 ticks. Parmi eux, 238 893 396 so
 
 ## S3 Requester Pays
 
-`pilote_s3_requester_pays.py` présente par défaut un plan hors ligne pour un seul objet du 5 janvier 2021. L’utilisateur a décliné l’autorisation pour l’instant. Aucun appel n’a été exécuté. Le scénario prévoit un HEAD, puis au maximum un GET Standard et 100 Mo. Le coût indicatif est de 0,009 USD avant taxes et franchise. [Format Dukascopy S3](https://wiki.dukascopy.com/en/development/data-export/) · [Tarification AWS](https://aws.amazon.com/s3/pricing/)
+`acquisition/pilote_s3_requester_pays.py` présente par défaut un plan hors ligne pour un seul objet du 5 janvier 2021. L’utilisateur a décliné l’autorisation pour l’instant. Aucun appel n’a été exécuté. Le scénario prévoit un HEAD, puis au maximum un GET Standard et 100 Mo. Le coût indicatif est de 0,009 USD avant taxes et franchise. [Format Dukascopy S3](https://wiki.dukascopy.com/en/development/data-export/) · [Tarification AWS](https://aws.amazon.com/s3/pricing/)
 
 ## Régénérer le rapport
 

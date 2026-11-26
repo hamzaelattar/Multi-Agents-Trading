@@ -9,7 +9,7 @@ import pandas as pd
 import talib
 
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data_binance"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "binance"
 DEFAULT_INPUT = DATA_DIR / "XAUUSDT_1min_binance.csv"
 PRICE_VOLUME_COLUMNS = ["open", "high", "low", "close", "volume"]
 MARKET_COLUMNS = ["timestamp", "symbol", *PRICE_VOLUME_COLUMNS]

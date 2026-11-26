@@ -292,7 +292,7 @@ def write_results(out, config, results):
 def common_parser(description, default_lookback=50):
     p=argparse.ArgumentParser(description=description)
     p.add_argument('--csv',required=True,help='Exact 35-column Binance XAUUSDT M1 CSV.')
-    p.add_argument('--out',default='runs/drl_dem')
+    p.add_argument('--out',default=Path(__file__).resolve().parents[1] / 'data' / 'training_runs' / 'drl_dem')
     p.add_argument('--lookback',type=int,default=default_lookback,
                    help='Number of last closed M1 candles; project default=50.')
     p.add_argument('--max-rows',type=int,default=0,

@@ -44,8 +44,7 @@ def read_export(module, file):
 
 
 def inspect_dates(root, journal):
-    repo = root / 'github'
-    module = runpy.run_path(str(repo / 'bronze/jforex/comparer_pilote_jforex.py'))
+    module = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'jforex/comparer_pilote_jforex.py'))
     data = root / 'data'
     old = data / 'XAUUSD_Ticks_2004.01.01_2021.10.15.csv'
     recent = data / 'XAUUSD_Ticks_2021.01.04_2026.11.20.csv'

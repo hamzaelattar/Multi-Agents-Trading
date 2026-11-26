@@ -12,5 +12,10 @@ venv/
 .env.*
 !.env.example
 
-# Sorties d’entraînement locales
+# Données et sorties locales
+/data/*
+!/data/README.md
+/.profilage_temp/
+
+# Sorties historiques
 /runs/
