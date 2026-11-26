@@ -34,12 +34,14 @@ Les notebooks et les outils partagent les entrées de `data/` et y écrivent leu
 | `reports/` et `logs/` | Bilans d’audit et journaux d’exécution. |
 | `pipeline_runs/` | Sorties PySpark classées par exécution, dont les pilotes. |
 
-### Exécuter un script d’entraînement
+### Entraînement sur les bougies Binance
 
-Depuis `github/`, utiliser l’environnement Python du projet. Les scripts prennent un CSV de bougies OHLC ordonnées chronologiquement. L’option `--out` permet de stocker les résultats dans le dossier de données local.
+Les trois scripts `train_*.py` attendent un CSV Binance XAUUSDT en bougies d’une minute avec les 35 colonnes prévues. L’historique XAUUSD du notebook PySpark suit son propre schéma. Dans `training/`, `calculer_indicateurs.py` prépare les indicateurs Binance et `training.py` contient des composants d’apprentissage PPO.
+
+Depuis `github/`, utiliser l’environnement Python du projet. L’option `--out` place les résultats dans le dossier de données local.
 
 ```powershell
-python training/train_drl_dem.py --csv "C:/chemin/vers/bougies.csv" --out "../data/training_runs/drl_dem"
+python training/train_drl_dem.py --csv "C:/chemin/vers/XAUUSDT_1min_binance_indicateurs.csv" --out "../data/training_runs/drl_dem"
 ```
 
 Les deux autres points d’entrée sont `training/train_finrl_ensemble.py` et `training/train_stockformer.py`. Chaque script expose ses paramètres avec `--help`.

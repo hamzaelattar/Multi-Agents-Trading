@@ -1,10 +1,17 @@
-# COMMON CORE — copied into each standalone training script.
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# XAUUSDT Binance, M1, 35-column schema, 50-bar lookback
+
+"""COMMON CORE embedded into each standalone training script.
+
+This file is a build-time source fragment only: the three delivered scripts each
+include this code, so end users do not need shared local imports.
+"""
 import argparse
 import copy
 import json
 import math
 import random
-import re
 from collections import deque
 from pathlib import Path
 
@@ -14,6 +21,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# EXACT column order provided by the project owner: 35 CSV columns.
+CSV_COLUMNS = [
+    'timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume',
+    'sma_5', 'sma_10', 'sma_20', 'sma_50',
+    'ema_5', 'ema_10', 'ema_20', 'ema_50',
+    'rsi_7', 'rsi_14',
+    'macd_5_13_4', 'macd_signal_5_13_4', 'macd_hist_5_13_4',
+    'macd_5_26_4', 'macd_signal_5_26_4', 'macd_hist_5_26_4',
+    'stoch_k_9_3', 'stoch_d_9_3', 'stoch_k_14_3', 'stoch_d_14_3',
+    'cci_14', 'atr_7', 'atr_14',
+    'bb_upper_20_2', 'bb_middle_20_2', 'bb_lower_20_2',
+    'obv_diff_10', 'obv_diff_20',
+]
+FEATURE_NAMES = CSV_COLUMNS[2:]  # exactly 33 numerical features
+PRICE_COLUMNS = ['open', 'high', 'low', 'close']
+LEVEL_COLUMNS = [name for name in FEATURE_NAMES if name.startswith(('sma_', 'ema_', 'bb_'))]
+RATIO_COLUMNS = [name for name in FEATURE_NAMES if name.startswith(('macd_', 'atr_'))]
+OBV_COLUMNS = ['obv_diff_10', 'obv_diff_20']
+
 
 def seed_everything(seed):
     random.seed(seed)
@@ -21,199 +47,202 @@ def seed_everything(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-"""
-Fixe les graines aléatoires de Python, NumPy et PyTorch pour rendre
-les expériences reproductibles. La même seed permet de retrouver
-les mêmes séquences aléatoires dans les mêmes conditions.
-Cela ne bloque pas l'apprentissage des neurones.
-"""
-
-def _canon(key):
-    return re.sub(r'[^a-z0-9]', '', str(key).lower())
-
-"""
-Standardise les noms des colonnes en les convertissant en minuscules
-et en supprimant les espaces, symboles et caractères spéciaux.
-Exemple : 'Bid_Open' devient 'bidopen'.
-"""
-
-def _col(df, *names):
-    names_by_canonical = {_canon(k): k for k in df.columns}
-    for name in names:
-        if _canon(name) in names_by_canonical:
-            return pd.to_numeric(df[names_by_canonical[_canon(name)]], errors='coerce')
-    return None
 
 
 class Market:
-    """Causal features; train-only standardization; next-open execution with costs."""
-    def __init__(self, csv_path, lookback=32, spread_bps=2.0, fee_bps=0.0,
-                 train_fraction=0.70, val_fraction=0.15, max_rows=0):
-        df = pd.read_csv(csv_path)
-        if len(df) < max(120, 3 * lookback + 30):
-            raise ValueError('CSV too short for train/validation/test and lookback.')
-        time_col = next((c for c in df.columns if _canon(c) in
-                         ('time', 'timestamp', 'datetime', 'date')), None)
-        self.times = None
-        if time_col:
-            df['__parsed_time__'] = pd.to_datetime(df[time_col], utc=True, errors='coerce')
-            if df['__parsed_time__'].isna().any():
-                raise ValueError('Some timestamps are invalid; fix the CSV first.')
-            df = df.sort_values('__parsed_time__').drop_duplicates('__parsed_time__')
-            self.times = df['__parsed_time__'].reset_index(drop=True)
-        if max_rows > 0 and len(df) > max_rows:
-            df = df.iloc[-max_rows:].copy()
-            if self.times is not None:
-                self.times = df['__parsed_time__'].reset_index(drop=True)
-            print(f'INFO: using ONLY last {len(df)} rows because --max-rows was set.')
-        df = df.reset_index(drop=True)
+    """One-symbol M1 market: causally scaled 33 features and 50-bar sequences.
 
-        price = {}
-        for kind in ('open', 'high', 'low', 'close'):
-            standard = _col(df, kind)
-            bid = _col(df, 'bid_' + kind, kind + '_bid')
-            ask = _col(df, 'ask_' + kind, kind + '_ask')
-            if standard is not None:
-                series = standard
-            elif bid is not None and ask is not None:
-                series = (bid + ask) / 2.0
-            elif bid is not None:
-                series = bid
-                print(f'INFO: {kind} uses BID quote only; bid/ask execution is approximated.')
-            else:
-                raise ValueError(f'Missing {kind} column (or bid_{kind}/ask_{kind}).')
-            price[kind] = series.to_numpy(dtype=np.float64)
-        self.open, self.high = price['open'], price['high']
-        self.low, self.close = price['low'], price['close']
-        if (not np.isfinite(np.stack(list(price.values()))).all() or
-                (np.stack(list(price.values())) <= 0).any()):
-            raise ValueError('Prices contain null, non-finite, or non-positive values.')
-        if (self.high < self.low).any():
-            raise ValueError('high must be >= low.')
+    Data contract:
+    - CSV contains ALL 35 named columns in the exact supplied order.
+    - Every row is a one-minute Binance XAUUSDT candle, timestamp UTC.
+    - Technical indicator NaNs are permitted ONLY as a leading warm-up prefix.
+    - Indicators must have been computed causally from past/current closed bars.
+    - Decision occurs AFTER close of t; execution is approximated at OPEN t+1.
+    - No bid/ask columns: no spread is included; fees/slippage are configurable.
+    - This is an exposure simulator, NOT a matching-engine or futures simulator.
+    """
+
+    def __init__(self, csv_path, lookback=50, fee_bps=0.0,
+                 slippage_bps=0.0, train_fraction=0.70, val_fraction=0.15,
+                 max_rows=0, allow_gaps=False):
+        if lookback < 2:
+            raise ValueError('lookback must be >=2')
+        if min(fee_bps, slippage_bps) < 0:
+            raise ValueError('Fee and slippage must be >= 0 bps.')
+        if not (0 < train_fraction < 1 and 0 < val_fraction < 1 and
+                train_fraction + val_fraction < 1):
+            raise ValueError('Invalid train/validation fractions.')
+        df = pd.read_csv(csv_path, dtype={'symbol': 'string'}, low_memory=False)
+        if list(df.columns) != CSV_COLUMNS:
+            missing = [c for c in CSV_COLUMNS if c not in df.columns]
+            extra = [c for c in df.columns if c not in CSV_COLUMNS]
+            raise ValueError(f'CSV schema does not match the exact 35 columns. '
+                             f'Missing={missing}; extra={extra}; '
+                             f'wrong_order={not (missing or extra)}')
+        if len(df) < max(160, lookback * 3 + 30):
+            raise ValueError('CSV is too short for 50-bar lookback and 3 chronological splits.')
+        if df['symbol'].isna().any() or set(df['symbol']) != {'XAUUSDT'}:
+            raise ValueError("Expected exactly one market symbol: 'XAUUSDT'.")
+        ts = pd.to_datetime(df['timestamp'], utc=True, errors='coerce')
+        if ts.isna().any():
+            raise ValueError('Invalid UTC timestamps in CSV.')
+        df = df.assign(timestamp=ts).sort_values('timestamp').reset_index(drop=True)
+        if max_rows > 0 and len(df) > max_rows:
+            df = df.iloc[-max_rows:].reset_index(drop=True)
+            print(f'INFO: --max-rows limits this run to the last {len(df):,} CSV rows.')
+        if df['timestamp'].duplicated().any():
+            raise ValueError('Duplicated (timestamp, symbol) rows; correct source data first.')
+        deltas = df['timestamp'].diff().dt.total_seconds().iloc[1:]
+        gaps = (deltas != 60).sum()
+        if gaps:
+            explanation = (f'{gaps} timestamp gap(s): expected exactly one row per minute. '
+                           'Fix the dataset, or pass --allow-gaps to knowingly use irregular bars.')
+            if not allow_gaps:
+                raise ValueError(explanation)
+            print('WARNING:', explanation)
+
+        for name in FEATURE_NAMES:
+            df[name] = pd.to_numeric(df[name], errors='coerce')
+        if not np.isfinite(df[PRICE_COLUMNS + ['volume']].to_numpy(np.float64)).all():
+            raise ValueError('OHLCV contains missing or nonfinite values.')
+        if (df[PRICE_COLUMNS] <= 0).any().any() or (df['volume'] < 0).any():
+            raise ValueError('OHLC must be >0 and volume nonnegative.')
+        if ((df['high'] < df[PRICE_COLUMNS].max(axis=1)) |
+                (df['low'] > df[PRICE_COLUMNS].min(axis=1))).any():
+            raise ValueError('Inconsistent OHLC (high/low do not bound open/close).')
+        complete = np.isfinite(df[FEATURE_NAMES].to_numpy(np.float64)).all(axis=1)
+        good = np.flatnonzero(complete)
+        if len(good) == 0:
+            raise ValueError('No fully populated indicator row. Please check indicator generation.')
+        warmup = int(good[0])
+        if not complete[warmup:].all():
+            raise ValueError('Indicator NaN/inf after warm-up. Only a leading NaN prefix is allowed.')
+        if warmup:
+            print(f'INFO: dropping {warmup} leading candle(s) with incomplete indicators.')
+        df = df.iloc[warmup:].reset_index(drop=True)
+        if len(df) < max(120, 3 * lookback + 30):
+            raise ValueError('Not enough COMPLETE indicator bars left for 3 splits.')
+
+        self.times = df['timestamp']
+        self.symbol = 'XAUUSDT'
+        self.open = df['open'].to_numpy(np.float64)
+        self.high = df['high'].to_numpy(np.float64)
+        self.low = df['low'].to_numpy(np.float64)
+        self.close = df['close'].to_numpy(np.float64)
         self.n = len(df)
         self.lookback = lookback
         self.fee_fraction = fee_bps / 10000.0
+        self.slippage_fraction = slippage_bps / 10000.0
+        print(f'COSTS: spread NOT modeled (CSV has no bid/ask); '
+              f'assumed fee={fee_bps} bps per side, slippage={slippage_bps} bps per side.')
 
-        bid_open = _col(df, 'bid_open', 'open_bid')
-        ask_open = _col(df, 'ask_open', 'open_ask')
-        spread = _col(df, 'spread')
-        if bid_open is not None and ask_open is not None:
-            self.spread_frac = ((ask_open - bid_open).to_numpy(dtype=np.float64) /
-                                np.maximum(self.open, 1e-12))
-        elif spread is not None:
-            # Explicit convention: a spread column is an ABSOLUTE price difference.
-            self.spread_frac = spread.to_numpy(dtype=np.float64) / self.open
-        else:
-            self.spread_frac = np.full(self.n, spread_bps / 10000.0)
-            print(f'INFO: no bid/ask or spread found; assuming {spread_bps} bps full spread.')
-        if not np.isfinite(self.spread_frac).all() or (self.spread_frac < 0).any():
-            raise ValueError('Invalid spread; expected nonnegative bid/ask difference.')
-
-        volume = _col(df, 'volume', 'tick_volume', 'tickvolume')
-        if volume is None:
-            volume = pd.Series(np.zeros(self.n, dtype=np.float64))
-            print('INFO: volume missing; volume-derived feature is set to zero.')
-        v = volume.fillna(0).clip(lower=0).to_numpy(dtype=np.float64)
-        lc = np.log(self.close)
-        ret = np.r_[0.0, np.diff(lc)]
-        ema20 = pd.Series(self.close).ewm(span=20, adjust=False).mean().to_numpy()
-        rv = pd.Series(ret).rolling(20, min_periods=2).std().fillna(0).to_numpy()
-        lv = np.log1p(v)
-        vdiff = np.r_[0.0, np.diff(lv)]
-        raw = np.column_stack([
-            ret, np.log(self.close / self.open), np.log(self.high / self.low),
-            (self.high - np.maximum(self.open, self.close)) / self.close,
-            (np.minimum(self.open, self.close) - self.low) / self.close,
-            np.log(self.close / ema20), rv, vdiff, self.spread_frac,
-        ])
-        raw = np.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0)
-        if not (0 < train_fraction < 1 and 0 < val_fraction < 1 and
-                train_fraction + val_fraction < 1):
-            raise ValueError('Invalid train and validation fractions.')
+        # One transformed feature per numerical CSV column (33 total).
+        # Price levels are expressed relative to the current close or previous close
+        # to reduce nonstationarity. These computations use only bars <= t.
+        close = df['close'].astype('float64')
+        prev_close = close.shift(1).fillna(close)
+        raw_cols = []
+        for name in FEATURE_NAMES:
+            v = df[name].to_numpy(np.float64)
+            if name in PRICE_COLUMNS:
+                x = np.log(v / prev_close.to_numpy(np.float64))
+            elif name == 'volume':
+                x = np.log1p(v)
+            elif name in LEVEL_COLUMNS:
+                x = np.log(v / self.close)
+            elif name in RATIO_COLUMNS:
+                x = 10000.0 * v / self.close
+            elif name in OBV_COLUMNS:
+                x = np.sign(v) * np.log1p(np.abs(v))
+            else:
+                x = v  # RSI, stochastic, CCI
+            raw_cols.append(x)
+        raw = np.column_stack(raw_cols)
+        if not np.isfinite(raw).all():
+            raise ValueError('Feature transformation produced NaN/inf; inspect data scale.')
         self.train_end = int(self.n * train_fraction)
         self.val_end = int(self.n * (train_fraction + val_fraction))
-        if min(self.train_end - lookback, self.val_end - self.train_end,
-               self.n - self.val_end) < 20:
-            raise ValueError('Train, validation and test each need enough bars.')
+        if min(self.train_end - lookback, self.val_end-self.train_end,
+               self.n-self.val_end) < 20:
+            raise ValueError('Each train/validation/test segment needs >= 20 decisions.')
         mu = raw[:self.train_end].mean(axis=0)
         std = raw[:self.train_end].std(axis=0)
         std[std < 1e-9] = 1.0
         self.mean, self.std = mu.astype(np.float32), std.astype(np.float32)
-        self.features = np.clip((raw - mu) / std, -8, 8).astype(np.float32)
+        self.features = np.clip((raw - mu) / std, -8., 8.).astype(np.float32)
         self.feature_count = self.features.shape[1]
-        # Target for a decision made after bar t: return inside NEXT bar (open[t+1]->close[t+1]).
-        self.target_bps = np.zeros(self.n, dtype=np.float32)
+        assert self.feature_count == 33
+
+        # Label at t: NEXT bar open-to-close return (unknown until after t+1).
+        self.target_bps = np.zeros(self.n, np.float32)
         self.target_bps[:-1] = (10000.0 * np.log(self.close[1:] / self.open[1:])).astype(np.float32)
-        self.bars_per_year = 252 * 288
-        if self.times is not None and len(self.times) > 2:
-            dt = self.times.diff().dt.total_seconds().dropna()
-            median = dt[dt > 0].median()
-            if np.isfinite(median) and median > 0:
-                # Forex-style 252 trading days x 24 hours, adjusted for detected bar size.
-                self.bars_per_year = max(1, int(252 * 24 * 3600 / median))
+        # Binance-style always-on M1 assumption. Override if market/session differs.
+        self.bars_per_year = 365 * 24 * 60
+        print(f'ROWS={self.n:,}; chronological splits train={self.train_end:,}, '
+              f'val={self.val_end-self.train_end:,}, test={self.n-self.val_end:,}; '
+              f'input_features=33, lookback={lookback}, bars/year={self.bars_per_year:,}')
+        print(f'UTC RANGE: {self.times.iloc[0]} -> {self.times.iloc[-1]}')
+        print('NOTICE: XAUUSDT (Binance) is NOT spot XAUUSD (Dukascopy). '
+              'No margin, leverage, funding, liquidation or order-book execution is modeled.')
 
     def window(self, t):
-        return self.features[t - self.lookback + 1:t + 1]
+        return self.features[t-self.lookback+1:t+1]
 
     def obs(self, t, pos, equity):
         return np.concatenate((self.window(t).reshape(-1),
-                               np.asarray([pos, np.log(max(equity, 1e-12))], dtype=np.float32)))
+                               np.array([pos, np.log(max(equity, 1e-12))], np.float32)))
 
     def transition(self, t, old_pos, target_pos, equity):
-        """Action at bar t close; rebalance at t+1 open, mark at t+1 close.
+        """Close(t) decision, OPEN(t+1) rebalance, CLOSE(t+1) mark-to-market.
 
-        Fractional position/linear exposure approximation, NOT a broker margin simulator.
+        target_pos in [-1,1]: -1 short, 0 flat, +1 long. Simulated exposure;
+        shorting is hypothetical and may not be available on the user's market.
         """
         j = t + 1
         target_pos = float(np.clip(target_pos, -1.0, 1.0))
         gap_return = self.open[j] / self.close[t] - 1.0
         bar_return = self.close[j] / self.open[j] - 1.0
-        turnover = abs(target_pos - old_pos)
-        cost = turnover * (self.fee_fraction + 0.5 * self.spread_frac[j])
-        simple = old_pos * gap_return + target_pos * bar_return - cost
-        ratio = max(1e-8, 1.0 + simple)
-        new_equity = float(equity * ratio)
-        log_reward = float(np.log(ratio))
-        return new_equity, log_reward, turnover
+        turnover = abs(target_pos-old_pos)
+        cost = turnover * (self.fee_fraction + self.slippage_fraction)
+        simple = old_pos*gap_return + target_pos*bar_return - cost
+        ratio = max(1e-8, 1.0+simple)
+        new_equity = float(equity*ratio)
+        return new_equity, float(np.log(ratio)), turnover
 
     def partitions(self):
-        return {'train': (self.lookback - 1, self.train_end - 1),
-                'validation': (self.train_end - 1, self.val_end - 1),
-                'test': (self.val_end - 1, self.n - 1)}
+        return {'train': (self.lookback-1, self.train_end-1),
+                'validation': (self.train_end-1, self.val_end-1),
+                'test': (self.val_end-1, self.n-1)}
 
 
 def metrics(equity_curve, log_rewards, turnover, bars_per_year):
-    equity_curve = np.asarray(equity_curve, dtype=float)
-    lr = np.asarray(log_rewards, dtype=float)
-    period_returns = np.expm1(lr)
-    if len(period_returns) > 1 and period_returns.std() > 1e-12:
-        sharpe = float(np.sqrt(bars_per_year) * period_returns.mean() /
-                       period_returns.std(ddof=1))
+    curve = np.asarray(equity_curve, dtype=float)
+    returns = np.expm1(np.asarray(log_rewards, dtype=float))
+    if len(returns)>1 and returns.std(ddof=1)>1e-12:
+        sharpe = float(np.sqrt(bars_per_year)*returns.mean()/returns.std(ddof=1))
     else:
         sharpe = 0.0
-    peaks = np.maximum.accumulate(equity_curve)
-    max_drawdown = float(np.min(equity_curve / np.maximum(peaks, 1e-12) - 1.0))
-    return {'total_return': float(equity_curve[-1] / equity_curve[0] - 1.0),
-            'sharpe_annualized': sharpe, 'max_drawdown': max_drawdown,
-            'turnover': float(turnover), 'bars': int(len(lr)),
-            'ending_equity': float(equity_curve[-1])}
+    peaks = np.maximum.accumulate(curve)
+    return {'total_return': float(curve[-1]/curve[0]-1.),
+            'sharpe_annualized': sharpe,
+            'max_drawdown': float((curve/np.maximum(peaks, 1e-12)-1.).min()),
+            'turnover': float(turnover), 'bars': int(len(returns)),
+            'ending_equity': float(curve[-1])}
 
 
 @torch.no_grad()
 def backtest(market, policy, start, end, bars_per_year=None):
-    """policy(observation, t, position, equity) -> scalar target exposure."""
     pos, equity = 0.0, 1.0
-    curve, rewards, turnover = [equity], [], 0.0
+    curve, rewards, turnover = [1.0], [], 0.0
     for t in range(start, end):
-        obs = market.obs(t, pos, equity)
-        action = float(policy(obs, t, pos, equity))
-        equity, lr, tv = market.transition(t, pos, action, equity)
+        observation = market.obs(t, pos, equity)
+        action = float(policy(observation, t, pos, equity))
+        equity, reward, tv = market.transition(t, pos, action, equity)
         pos = float(np.clip(action, -1, 1))
         curve.append(equity)
-        rewards.append(lr)
+        rewards.append(reward)
         turnover += tv
-    return metrics(curve, rewards, turnover,
-                   bars_per_year or market.bars_per_year), curve
+    return metrics(curve, rewards, turnover, bars_per_year or market.bars_per_year), curve
 
 
 class Replay:
@@ -227,79 +256,83 @@ class Replay:
 
     def push(self, s, a, r, s2, done):
         i = self.i
-        self.s[i], self.a[i], self.r[i, 0] = s, a, r
-        self.s2[i], self.done[i, 0] = s2, float(done)
-        self.i = (i + 1) % self.cap
-        self.count = min(self.count + 1, self.cap)
+        self.s[i], self.a[i], self.r[i,0] = s,a,r
+        self.s2[i], self.done[i,0] = s2,float(done)
+        self.i = (i+1)%self.cap
+        self.count = min(self.count+1,self.cap)
 
     def sample(self, batch, device):
-        idx = np.random.randint(0, self.count, size=batch)
-        return tuple(torch.as_tensor(arr[idx], device=device) for arr in
-                     (self.s, self.a, self.r, self.s2, self.done))
+        idx = np.random.randint(0,self.count,size=batch)
+        return tuple(torch.as_tensor(arr[idx],device=device) for arr in
+                     (self.s,self.a,self.r,self.s2,self.done))
 
 
-def mlp(inputs, outputs, hidden=128, depth=2):
-    layers = []
-    dim = inputs
+def mlp(inputs,outputs,hidden=128,depth=2):
+    layers=[]
+    dim=inputs
     for _ in range(depth):
-        layers.extend([nn.Linear(dim, hidden), nn.ReLU()])
-        dim = hidden
-    layers.append(nn.Linear(dim, outputs))
+        layers += [nn.Linear(dim,hidden),nn.ReLU()]
+        dim=hidden
+    layers.append(nn.Linear(dim,outputs))
     return nn.Sequential(*layers)
 
 
 def write_results(out, config, results):
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
-    with (out / 'metrics.json').open('w', encoding='utf8') as f:
-        json.dump({'configuration': vars(config), 'results': results}, f, indent=2, default=str)
-    print('METRICS:', json.dumps(results, indent=2))
-    print('Output directory:', out.resolve())
+    out=Path(out);out.mkdir(parents=True,exist_ok=True)
+    with (out/'metrics.json').open('w',encoding='utf8') as f:
+        json.dump({'configuration':vars(config), 'expected_csv_columns':CSV_COLUMNS,
+                   'model_features':FEATURE_NAMES,
+                   'feature_preprocessing':'price returns/levels relative to close; volume log1p; momentum raw; MACD/ATR relative in bps; OBV signed log1p; train-only z-score',
+                   'execution':'bar t closed -> trade at next open -> mark at next close; spread not modeled; optional assumed fees/slippage',
+                   'results':results},f,indent=2,default=str)
+    print('METRICS:',json.dumps(results,indent=2))
+    print('Saved:',out.resolve())
 
 
-def common_parser(description, default_lookback):
-    p = argparse.ArgumentParser(description=description)
-    p.add_argument('--csv', required=True, help='Chronologically ordered XAUUSD OHLC CSV.')
-    p.add_argument('--out', default='runs/trading')
-    p.add_argument('--lookback', type=int, default=default_lookback)
-    p.add_argument('--max-rows', type=int, default=0, help='0=all rows; otherwise use last N rows.')
-    p.add_argument('--spread-bps', type=float, default=2.0, help='Full spread if absent from CSV.')
-    p.add_argument('--fee-bps', type=float, default=0.0, help='Additional per-side commission in bps.')
-    p.add_argument('--seed', type=int, default=42)
-    p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto')
-    p.add_argument('--bars-per-year', type=int, default=0, help='0=derive from timestamps, forex convention.')
+def common_parser(description, default_lookback=50):
+    p=argparse.ArgumentParser(description=description)
+    p.add_argument('--csv',required=True,help='Exact 35-column Binance XAUUSDT M1 CSV.')
+    p.add_argument('--out',default='runs/drl_dem')
+    p.add_argument('--lookback',type=int,default=default_lookback,
+                   help='Number of last closed M1 candles; project default=50.')
+    p.add_argument('--max-rows',type=int,default=0,
+                   help='0=all rows; otherwise last N rows (for pilot runs).')
+    p.add_argument('--allow-gaps',action='store_true',
+                   help='Allow non-1-minute time gaps; use carefully.')
+    p.add_argument('--fee-bps',type=float,default=0.0,
+                   help='ASSUMED fee per side, in basis points.')
+    p.add_argument('--slippage-bps',type=float,default=0.0,
+                   help='ASSUMED slippage per side, in basis points.')
+    p.add_argument('--seed',type=int,default=42)
+    p.add_argument('--device',choices=['auto','cpu','cuda'],default='auto')
+    p.add_argument('--bars-per-year',type=int,default=0,
+                   help='0=365*24*60 for 24/7 M1. Adjust for session schedule.')
     return p
 
 
 def build_market(args):
     seed_everything(args.seed)
-    device = torch.device('cuda' if args.device == 'auto' and torch.cuda.is_available()
-                          else 'cpu' if args.device == 'auto' else args.device)
-    if device.type == 'cuda' and not torch.cuda.is_available():
+    device=torch.device('cuda' if args.device=='auto' and torch.cuda.is_available()
+                        else 'cpu' if args.device=='auto' else args.device)
+    if device.type=='cuda' and not torch.cuda.is_available():
         raise RuntimeError('CUDA requested but unavailable')
-    m = Market(args.csv, args.lookback, args.spread_bps, args.fee_bps,
-               max_rows=args.max_rows)
-    if args.bars_per_year > 0:
-        m.bars_per_year = args.bars_per_year
-    print(f'rows={m.n:,}; features={m.feature_count}; lookback={m.lookback}; '
-          f'splits={m.partitions()}; device={device}')
-    return m, device
+    m=Market(args.csv,lookback=args.lookback,
+             fee_bps=args.fee_bps,slippage_bps=args.slippage_bps,
+             max_rows=args.max_rows,allow_gaps=args.allow_gaps)
+    if args.bars_per_year>0:
+        m.bars_per_year=args.bars_per_year
+    print(f'Device={device}; split decision ranges: {m.partitions()}')
+    return m,device
 
 
-def sample_windows(market, low, high, batch, device):
-    """Indexes uniformly in [low,high) with next-bar targets; no future beyond high."""
-    indices = np.random.randint(low, high, size=batch)
-    xx = np.stack([market.window(int(t)) for t in indices])
-    yy = market.target_bps[indices]
-    return indices, torch.from_numpy(xx).to(device), torch.from_numpy(yy).to(device).unsqueeze(-1)
+def sample_windows(market,low,high,batch,device):
+    """Random causally observed windows, labels known within training split only."""
+    ids=np.random.randint(low,high,size=batch)
+    xx=np.stack([market.window(int(t)) for t in ids])
+    yy=market.target_bps[ids]
+    return ids,torch.from_numpy(xx).to(device),torch.from_numpy(yy).to(device).unsqueeze(-1)
 
-# ===== Approach 2: DRL-DEM-inspired 6 predictors + actor-critic =============
-# Research basis: NEUR2, Lin/Xie/Xu, Electronics 2023.
-# Faithful ingredients: 6 GRU/ALSTM/Transformer predictors (64,128 each),
-# MSE vs SmoothL1 objectives, actor with THREE 3-linear-layer MLP branches,
-# softmax predictor weights, actor-critic replay, supervised+trading fine-tuning.
-# XAUUSD adaptation: predicted future return is mapped to a bounded exposure;
-# original paper used a top-q stock portfolio, which requires multiple stocks.
+
 
 class Predictor(nn.Module):
     def __init__(self, family, features, hidden, lookback):
@@ -509,7 +542,7 @@ def joint_fine_tune(m, models, sim, agent, args, device):
                            dtype=torch.float32, device=device)
         intrabar = torch.tensor(m.close[ids+1] / m.open[ids+1] - 1.0,
                                 dtype=torch.float32, device=device)
-        transaction_cost = torch.tensor(m.spread_frac[ids+1] * .5 + m.fee_fraction,
+        transaction_cost = torch.tensor(m.fee_fraction + m.slippage_fraction,
                                         dtype=torch.float32, device=device)
         net = (1.0 + old_pos * gap + signal * intrabar -
                torch.abs(signal - old_pos) * transaction_cost)
@@ -528,7 +561,7 @@ def joint_fine_tune(m, models, sim, agent, args, device):
 
 
 def main():
-    parser = common_parser('DRL-DEM-inspired GRU/ALSTM/Transformer + weighting actor-critic', 15)
+    parser = common_parser('DRL-DEM-inspired GRU/ALSTM/Transformer + weighting actor-critic for XAUUSDT M1', 50)
     parser.add_argument('--predictor-updates', type=int, default=500,
                         help='SGD updates PER predictor (six predictors).')
     parser.add_argument('--predictor-lr', type=float, default=3e-4)
@@ -570,7 +603,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     torch.save({'predictors': models.state_dict(), 'actor': agent.actor.state_dict(),
                 'critic': agent.critic.state_dict(), 'predictor_configs': configs,
-                'scaler_mean': m.mean, 'scaler_std': m.std,
+                'scaler_mean': m.mean, 'scaler_std': m.std, 'feature_names': FEATURE_NAMES,
                 'lookback': m.lookback, 'signal_scale': args.signal_scale,
                 'feature_count': m.feature_count}, out/'drl_dem.pt')
     write_results(out, args, results)
