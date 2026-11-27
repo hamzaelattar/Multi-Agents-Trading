@@ -1,16 +1,17 @@
 # Pipeline Big Data XAUUSD
 
-## Ordre de lecture
+## Ordre d’exécution
 
-| Étape | Entrée | Résultat |
+| Notebook | Entrée | Sortie |
 | --- | --- | --- |
-| 1. Collecte Bronze | CSV historiques et exports fournisseur | Sources et preuves conservées dans `data/`. Voir [les outils Bronze](bronze/). |
-| 2. Profilage DuckDB | CSV historiques | Couverture, chevauchement, décimales, anomalies et métriques. Ouvrir [le notebook de profilage](notebooks/Profilage_donnees_XAUUSD.ipynb). |
-| 3. Nettoyage Silver | Lots admis par le catalogue | Ticks normalisés en UTC, dédupliqués et validés. Les lignes non résolues rejoignent la quarantaine. |
-| 4. Enrichissement Gold | Ticks Silver | Bougies multi-échelles et variables calculées avec l’information disponible à chaque instant. |
-| 5. Préparation des datasets | Variables Gold | Parquet partitionné en `train`, `validation` et `test` dans l’ordre chronologique. Le scaler est ajusté sur le train. |
+| [01 Bronze](notebooks/01_Bronze.ipynb) | Originaux et lots récupérés | Catalogue, profil Spark par mois et par source, empreintes et métriques. |
+| [02 Silver](notebooks/02_Silver.ipynb) | Catalogue et audit Bronze compatibles | Réparations prouvées, ticks en UTC, quarantaine et neuf séries OHLCV. |
+| [03 Gold](notebooks/03_Gold.ipynb) | Ticks validés et bougies Silver | Variables causales, catalogue des features et profil numérique. |
+| [04 Dataset Builder](notebooks/04_Dataset_Builder.ipynb) | Features et catalogue Gold | Jeux Parquet Train, Validation et Test, fenêtres, paramètres du scaler et bilan. |
 
-Les étapes 3 à 5 sont dans le [notebook PySpark](notebooks/Pipeline_BigData_XAUUSD.ipynb). Ses cellules se suivent de la configuration au rapport final.
+Chaque notebook initialise sa propre session Spark. Exécuter les quatre avec le même périmètre et le même `XAUUSD_RUN_LABEL`. Les manifestes et marqueurs vérifient les dépendances. Pour lire les sorties d’un FULL sans recalcul, utiliser `XAUUSD_MODE=SNAPSHOT` et `XAUUSD_RESUME_MODE=FULL`. Sous Linux ou Ubuntu WSL2, le noyau utilise Python, Java 17, PySpark 4.0.1, PyArrow, Psutil et Matplotlib.
+
+`XAUUSD_DATASET_OPTIONS` accepte un objet JSON. Exemples de réglages : `features` peut être `"all"` ou une liste de colonnes, `families` filtre selon le catalogue Gold, `lookback` fixe la longueur de fenêtre, et `scaler` accepte `standard`, `minmax`, `robust` et `none`. Les options personnalisées ont une sortie identifiée par leur empreinte. Les seuils de disponibilité et les valeurs manquantes peuvent exclure une observation. Consulter les effectifs et la couverture avant d’utiliser un dataset.
 
 ## Outils Bronze
 
@@ -19,7 +20,7 @@ Les étapes 3 à 5 sont dans le [notebook PySpark](notebooks/Pipeline_BigData_XA
 - [jforex/](bronze/jforex/) et [histdata/](bronze/histdata/) regroupent les outils propres à chaque fournisseur.
 - [preuves/](bronze/preuves/) conserve des résultats, empreintes et rapports de référence versionnés.
 
-Le mode PySpark `SNAPSHOT` est le mode par défaut. Il consulte les résultats présents sans calcul Spark. `TEST` et `PILOT` écrivent respectivement sous `data/pipeline_runs/test/` et `data/pipeline_runs/pilot_<debut>_<fin>/`. `FULL` écrit sous `data/pipeline_runs/full/`. Les modes de calcul requièrent le noyau Linux ou WSL2 avec PySpark et Java.
+Le mode PySpark `SNAPSHOT` est le mode par défaut. Il consulte les résultats présents sans calcul Spark. `TEST` et `PILOT` écrivent respectivement sous `data/pipeline_runs/test/` et `data/pipeline_runs/pilot_<debut>_<fin>/`. `FULL` écrit sous `data/pipeline_runs/full/`. Les profils et résultats de pilotage sont séparés des sorties FULL. Les métriques non exposées par Spark UI sont marquées indisponibles.
 
 `XAUUSD_PROJECT_DIR` permet d’indiquer la racine du projet. `XAUUSD_DATA_DIR` permet de pointer les notebooks vers un autre emplacement de données.
 
